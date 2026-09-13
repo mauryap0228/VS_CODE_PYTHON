@@ -8,54 +8,93 @@
 # # Plot the data as a line graph using matplotlib
 # Make it look clean with labeled axes and a title
 
+import serial
+import time
 import matplotlib.pyplot as plt
 
-readings = [72, 68, 75, 80, 63, 71, 77, 85, 69, 74, 78, 82, 66, 70]
+#  Serial setup
+ser = serial.Serial('/dev/cu.usbmodem1401', 9600)
+
+temp_readings = []
+humidity_readings = []
+
+start_time = time.time()
+duration = 3600  # 1 hour
+
+print("Collecting data for 1 hour...")
+
+while time.time() - start_time < duration:
+    line = ser.readline().decode('utf-8').strip()
+
+    if line.startswith("Temp:"):
+        try:
+            # line looks like: "Temp: 72.50 F  Humidity: 45.00 %"
+            parts = line.split()
+            temp_value = float(parts[1])       # the number right after "Temp:"
+            # the number right after "Humidity:"
+            humidity_value = float(parts[4])
+
+            temp_readings.append(temp_value)
+            humidity_readings.append(humidity_value)
+
+            print(
+                f"Logged -> Temp: {temp_value}F  Humidity: {humidity_value}%")
+        except (IndexError, ValueError):
+            print("Skipped a malformed line:", line)
+
+print("Done collecting.")
+ser.close()
+
+#  Analysis functions
 
 
-def info(readings):
-    minimum_t = min(readings)
-    maximum_t = max(readings)
-    avg = round(sum(readings)/len(readings), 2)
-    temp_range = max(readings) - min(readings)
-    print(f""" 
-        Minimum temperature: {minimum_t}
-        Maximum temperature: {maximum_t} 
-        Average temperature: {avg}
-        Range:               {temp_range}""")
+def info(readings, label, unit):
+    minimum = min(readings)
+    maximum = max(readings)
+    avg = round(sum(readings) / len(readings), 2)
+    data_range = max(readings) - min(readings)
+    print(f"""
+        Minimum {label}: {minimum}{unit}
+        Maximum {label}: {maximum}{unit}
+        Average {label}: {avg}{unit}
+        Range:           {data_range}{unit}""")
 
 
-info(readings)
-
-
-def above_average(readings):
-    avg = round(sum(readings)/len(readings), 2)
+def above_average(readings, label, unit):
+    avg = round(sum(readings) / len(readings), 2)
     above_list = []
     above = 0
     for i in readings:
         if i > avg:
             above_list.append(i)
             above += 1
-    print(f""" {above} readings are above average ({avg}):
+    print(f""" {above} {label} readings are above average ({avg}{unit}):
           {above_list}""")
 
 
-above_average(readings)
-
-
-def plot_data(readings):
+def plot_data(readings, label, unit, color):
     days = list(range(1, len(readings) + 1))
     avg = round(sum(readings) / len(readings), 2)
 
     plt.figure(figsize=(10, 5))
-    plt.plot(days, readings, color="blue", marker="o", label="Temperature")
-    plt.axhline(y=avg, color="red", linestyle="--", label=f"Average ({avg}°F)")
-    plt.title("Temperature Readings Over 14 Days")
-    plt.xlabel("Day")
-    plt.ylabel("Temperature (°F)")
+    plt.plot(days, readings, color=color, marker="o", label=label.capitalize())
+    plt.axhline(y=avg, color="red", linestyle="--",
+                label=f"Average ({avg}{unit})")
+    plt.title(f"{label.capitalize()} Readings Over {len(readings)} Intervals")
+    plt.xlabel("Reading #")
+    plt.ylabel(f"{label.capitalize()} ({unit})")
     plt.legend()
     plt.grid(True)
     plt.show()
 
 
-plot_data(readings)
+# Run analysis on the collected data
+if len(temp_readings) > 0:
+    info(temp_readings, "temperature", "°F")
+    above_average(temp_readings, "temperature", "°F")
+    plot_data(temp_readings, "temperature", "°F", "blue")
+
+if len(humidity_readings) > 0:
+    info(humidity_readings, "humidity", "%")
+    above_average(humidity_readings, "humidity", "%")
+    plot_data(humidity_readings, "humidity", "%", "green")
